@@ -150,6 +150,7 @@ h4 { font: 700 15px/1.3 var(--font-display); margin: 0 0 4px; }
 .map-out { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-width: 0; }
 .map-out .code-bar { padding: 10px 14px; }
 .map-out pre.code { max-height: none; }
+.ref-h { font: 700 20px/1.3 var(--font-display); margin: 28px 0 14px; }
 footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
 
 @media (max-width: 420px) {
@@ -164,12 +165,13 @@ footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
 <header class="top">
   <div class="kicker">Base SAS · Enterprise Guide ready</div>
   <h1>SAS Early Warning Toolkit</h1>
-  <p class="lede">Two SAS programs that spot trouble early. One flags days and weeks when volumes move unusually far from normal. The other finds the words people suddenly start using in free-text comments.</p>
+  <p class="lede">Two SAS programs that spot trouble early. One flags days, weeks and months when volumes move unusually far from normal. The other finds the words people suddenly start using in free-text comments.</p>
   <nav class="jump" aria-label="Sections">
     <a href="#start">Before you start</a>
     <a href="#volumes">1 · Volume deviations</a>
     <a href="#keywords">2 · Rising keywords</a>
     <a href="#your-data">3 · Plug in your data</a>
+    <a href="#reference">4 · Full reference</a>
   </nav>
 </header>
 
@@ -205,7 +207,7 @@ footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
 <section id="volumes">
   <div class="sec-head">
     <span class="sec-num">01</span><h2>Volume deviation monitor</h2>
-    <p class="sec-sub">For each day (or week), the program works out what normal looks like from recent history, then flags anything more than <i>k</i> standard deviations away from it.</p>
+    <p class="sec-sub">For each day, week or month, the program works out what normal looks like from recent history, then flags anything more than <i>k</i> standard deviations away from it.</p>
   </div>
   <div class="grid">
     <div class="card wide key">
@@ -267,7 +269,7 @@ footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
     <div class="card">
       <span class="tag">Weekdays</span>
       <h3>Mondays vs Mondays</h3>
-      <p>Mon–Sat each get their own baseline: the last 8 of the same weekday. A quiet Saturday is judged against other Saturdays, so it isn't flagged LOW for being lower than a Tuesday.</p>
+      <p>Mon–Sat each get their own baseline made of the same weekday only. By default that's the last 56 days, so 8 earlier Mondays for a Monday. A quiet Saturday is judged against other Saturdays, so it isn't flagged LOW for being lower than a Tuesday.</p>
     </div>
     <div class="card warn">
       <span class="tag">Sundays</span>
@@ -282,20 +284,132 @@ footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
     <div class="card">
       <span class="tag">Weekly view</span>
       <h3>Weeks start on Monday</h3>
-      <p>Daily volumes are added up into Monday-to-Sunday weeks with <code>intnx('week.2', …)</code>, then checked against the previous 12 weeks. Every week has a weekend, so no adjustment is needed.</p>
+      <p>Daily volumes are added up into Monday-to-Sunday weeks with <code>intnx('week.2', …)</code>, and each week is labelled with its Monday's date. By default each week is checked against the previous 12. Every week has a weekend, so no adjustment is needed.</p>
+    </div>
+    <div class="card wide key">
+      <span class="tag">How you run it</span>
+      <h3>Set the dates, then one call for everything</h3>
+      <p>Set the date range at the top of the program, then use the <code>%volume_check</code> calls at the bottom. <code>period=ALL</code> runs day, week and month in one call. Give one baseline for all three, or one each in the same order.</p>
+      <pre class="code" style="max-height:none">%let start_date = 01JAN2025;     <span class="c">/* blank = from the start of the file */</span>
+%let end_date   = 30JUN2026;     <span class="c">/* blank = to the end of the file     */</span>
+
+<span class="c">/* Everything in one go */</span>
+%volume_check(period=ALL, baseline=90D | 26W | 12M,
+              views=ALL | product | channel | product channel);
+
+<span class="c">/* Or one period at a time */</span>
+%volume_check(period=DAY,   baseline=90D, views=ALL | product);
+%volume_check(period=MONTH, baseline=12M, views=ALL, tables=N);
+
+%flag_summary;</pre>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>Parameter</th><th>If left out</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>period=</td><td>required</td><td><b>DAY</b>, <b>WEEK</b>, <b>MONTH</b>, a list such as <code>DAY | WEEK</code>, or <b>ALL</b> for all three. DAY also runs the Sunday check.</td></tr>
+          <tr><td>baseline=</td><td>56D / 12W / 12M</td><td>How much earlier history to compare against: <b>ALL</b>, or a rolling span such as 90D, 26W, 12M or 2Y. One value applies to every period. A list such as <code>90D | 26W | 12M</code> gives one per period, in the same order.</td></tr>
+          <tr><td>views=</td><td>ALL</td><td>Which splits to run, separated by <code>|</code>: ALL, product, channel, product channel …</td></tr>
+          <tr><td>min_obs=</td><td>4 / 6 / 6</td><td>How many earlier periods the baseline needs before anything is flagged. One value, or one per period.</td></tr>
+          <tr><td>charts=</td><td>Y</td><td>A chart for each group.</td></tr>
+          <tr><td>tables=</td><td>Y</td><td>A full table of every day, week or month, with flagged rows highlighted.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="note">Key observations are always printed. <code>%flag_summary;</code> ends the run with every call-out from every call.</p>
+    </div>
+
+    <div class="card wide">
+      <span class="tag">Output</span>
+      <h3>What each check gives you</h3>
+      <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
+        <div>
+          <div class="chips"><span class="chip high">1</span><b>Key observations</b></div>
+          <p class="note">The urgent call-outs. Flagged periods only, worst first, with the volume, the expected value and range, % vs expected, and z-score. If there's nothing to report, it says so.</p>
+        </div>
+        <div>
+          <div class="chips"><span class="chip new">2</span><b>Chart per group</b></div>
+          <p class="note">Volume against the shaded expected range, with markers on HIGH and LOW periods.</p>
+        </div>
+        <div>
+          <div class="chips"><span class="chip ok">3</span><b>Full table</b></div>
+          <p class="note">Every day, week or month, with HIGH rows in red, LOW rows in purple and WARMUP rows greyed out.</p>
+        </div>
+        <div>
+          <div class="chips"><span class="chip grey">4</span><b>Run summary</b></div>
+          <p class="note">Every call-out from the whole run, most recent first, plus counts by period, view and group. All of it is also kept in <code>WORK.ALL_FLAGS</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card warn">
+      <span class="tag">Date range</span>
+      <h3>Leave room for the baseline</h3>
+      <p>The date range filters <b>everything</b>, baselines included. If you start on 1 March with a 90D baseline, early March has no history to compare with and shows as WARMUP. Start around 90 days before the dates you care about.</p>
+      <p class="note">Write dates like <code>01JAN2025</code>. Anything else is reported as an ERROR in the log, and that limit is ignored.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Output size</span>
+      <h3>Everything can mean a lot of output</h3>
+      <p>With all three periods and four views, that's dozens of charts and some long daily tables. For a quick look, set <code>charts=N tables=N</code> and use the key observations and run summary.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Baseline</span>
+      <h3>All history, or a rolling span</h3>
+      <p><b>ALL</b> uses every earlier period in the file, so the baseline grows over time. A <b>rolling span</b> uses only the most recent history before each date and moves forward with it.</p>
+      <ul>
+        <li><b>90D</b> suits daily checks: about 13 earlier Mondays for a Monday</li>
+        <li><b>26W</b> suits weekly checks</li>
+        <li><b>12M</b> or <b>2Y</b> suits monthly checks</li>
+      </ul>
+      <p class="note">Choose rolling if volumes drift, so you aren't comparing with an old normal. Match the span to the period: 90D gives a monthly check only about 3 months, which is below min_obs, so nothing would ever be flagged.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Views</span>
+      <h3>Everything, by product, by channel, or both</h3>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>In views=</th><th>Checks</th></tr></thead>
+        <tbody>
+          <tr><td>ALL</td><td>Straight totals</td></tr>
+          <tr><td>product</td><td>Each product against its own history</td></tr>
+          <tr><td>channel</td><td>Each channel against its own history</td></tr>
+          <tr><td>product channel</td><td>Each combination, such as Cards/Phone</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="note">Each call can use different views. For example, you could check days by product and channel but months as totals only.</p>
+    </div>
+    <div class="card warn">
+      <span class="tag">Good to know</span>
+      <h3>Groups and missing days</h3>
+      <ul>
+        <li><b>Missing days count as 0.</b> If a group has no records on a day, that day is filled in as 0, so it can still be flagged LOW.</li>
+        <li><b>Small groups are noisy.</b> Combinations with only a handful of items a day will flag often, so use a broader view or raise <code>k</code> to 3.</li>
+        <li><b>One problem can show up in several views.</b> A Cards/Phone spike may also show in Cards, in Phone and in the totals. The finest view that flags it tells you where it came from.</li>
+      </ul>
+    </div>
+    <div class="card key">
+      <span class="tag">Monthly view</span>
+      <h3>Average per open day</h3>
+      <p>Months have different numbers of working days and bank holidays, so comparing raw totals would flag short months as LOW. The program divides each month's total by its <b>open days</b> (Mon–Sat, not a bank holiday) and by default checks that average against the previous 12 months.</p>
+      <p class="note">The report shows the total, the number of open days and the average, so you can see which one moved. The calendar is built from dates, so a day with no records still counts as an open day.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Monthly view</span>
+      <h3>Needs at least 6 months of history</h3>
+      <p>Nothing is flagged until a month has 6 earlier months to compare with. With the default 12M baseline, give it at least 18 months of data. Seasonal months such as December may flag every year. A 12-month baseline softens that but doesn't remove it.</p>
     </div>
 
     <div class="card wide">
       <span class="tag">Settings</span>
-      <h3>Choices at the top of the program</h3>
+      <h3>Settings at the top</h3>
       <div class="table-scroll">
       <table>
         <thead><tr><th>Setting</th><th>Default</th><th>What it changes</th></tr></thead>
         <tbody>
-          <tr><td>k</td><td class="num">2</td><td>How far from normal counts as unusual. At 2, about 1 normal day in 20 is flagged. At 3, very few normal days are flagged, so the flags are more likely to be real problems.</td></tr>
-          <tr><td>window</td><td class="num">28 / 8 / 12</td><td>How many previous periods make up the baseline: days, same-weekdays or weeks.</td></tr>
-          <tr><td>min_obs</td><td class="num">14 / 4 / 6</td><td>How much history is needed before anything is flagged.</td></tr>
-          <tr><td>by=</td><td>dow</td><td>Gives each group its own baseline. Use it for day of week, team or product.</td></tr>
+          <tr><td>k</td><td class="num">2</td><td>Set once by <code>%let k</code> at the top, and used by every call. How far from normal counts as unusual. At 2, about 1 normal day in 20 is flagged. At 3, very few normal days are flagged, so the flags are more likely to be real problems.</td></tr>
+          <tr><td>start_date</td><td>blank</td><td>Ignore data before this date, for example 01JAN2025. Blank means from the start of the file.</td></tr>
+          <tr><td>end_date</td><td>blank</td><td>Ignore data after this date. Blank means to the end of the file.</td></tr>
         </tbody>
       </table>
       </div>
@@ -306,142 +420,274 @@ footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
       <h3>When volumes shift for good</h3>
       <p>If volumes permanently go up or down, you'll get a run of flags until the look-back window catches up. That's usually useful, because the run itself tells you something changed.</p>
     </div>
-    <div class="card">
-      <span class="tag">Output</span>
-      <h3>What you get</h3>
-      <ul>
-        <li>A list of flagged days, with mean, SD and z-score</li>
-        <li>A list of flagged weeks</li>
-        <li>A list of Sundays with activity</li>
-        <li>A chart of volume against the shaded expected range</li>
-      </ul>
-    </div>
 
     <div class="card wide code-card">
       <div class="code-bar">
-        <div><h3>volume_deviation_flags.sas</h3><span class="meta">191 lines · paste into a new EG program</span></div>
+        <div><h3>volume_deviation_flags.sas</h3><span class="meta">804 lines · paste into a new EG program</span></div>
         <button class="copy" type="button" id="copy-vol" data-target="code-vol">Copy program</button>
       </div>
       <pre class="code" id="code-vol" tabindex="0"><span class="c">/*====================================================================
-  Volume deviation monitor
-  Flags days/weeks where volume is more than K standard deviations
-  from the rolling mean of the previous WINDOW periods.
-  Base SAS only (no SAS/ETS needed). Runs as-is in SAS OnDemand / Viya.
+  VOLUME DEVIATION MONITOR                       Base SAS 9.4 / EG
+  ====================================================================
+  WHAT IT DOES
+  Spots days, weeks and months where volume is unusually high or low.
+  For each period it works out "normal" from a baseline of EARLIER
+  periods (their mean and standard deviation) and flags anything more
+  than K standard deviations away. A period is never part of its own
+  baseline, so a spike can't hide by raising the bar.
+
+  HOW TO RUN IT
+  1. Step 0: replace the sample data with your own table (keep the
+     column names DATE and VOLUME - see INPUT DATA below), or run the
+     sample first to see what the output looks like.
+  2. Set K, START_DATE and END_DATE just below this box.
+  3. Add your bank holidays in step 1 if your data goes beyond 2026.
+  4. Edit the %volume_check calls in step 4 (the bottom of the program).
+  5. Run the whole program (F3 in Enterprise Guide).
+
+  ====================================================================
+  QUICK REFERENCE - every setting and argument
+  ====================================================================
+
+  SETTINGS AT THE TOP (apply to every check)
+  ------------------------------------------
+  k           How many standard deviations from normal counts as unusual.
+                2    sensitive: about 1 in 20 normal periods gets flagged
+                2.5  middle ground
+                3    strong signals only: about 1 in 370 normal periods
+              Default 2. Decimals are fine.
+
+  start_date  Ignore data before this date. Write it like 01JAN2025.
+              Blank = from the start of the file.
+  end_date    Ignore data after this date. Write it like 30JUN2026.
+              Blank = to the end of the file.
+              NB the date range limits the baseline history too, so start
+              about one baseline-length before the dates you care about.
+
+  INPUT DATA (step 0) - must end up as table WORK.RAW
+  ---------------------------------------------------
+  date        Numeric SAS date. If yours is a date-time (e.g.
+              02NOV2026:09:15:00) use  date = datepart(your_column);
+  volume      Numeric. If each row is one item, use  volume = 1;
+  &lt;groups&gt;    Optional extra columns to split by (product, channel, team...).
+              Keep their own names and use them in views= .
+
+  BANK HOLIDAYS (step 1) - table WORK.HOLIDAYS
+  --------------------------------------------
+  One date per line, like 25DEC2026. These days are left out of the
+  daily check (so they don't flag as LOW) and don't count as open days
+  in the monthly check. England &amp; Wales 2025-26 are filled in.
+
+  %volume_check( period=, baseline=, views=, min_obs=, charts=, tables= )
+  -----------------------------------------------------------------------
+  period=    REQUIRED. Which period(s) to check.
+               DAY    each Mon-Sat day vs the SAME weekday (Mondays vs
+                      Mondays...), plus a check that Sundays are zero
+               WEEK   Monday-to-Sunday weeks, labelled by the Monday
+               MONTH  calendar months, compared as AVERAGE PER OPEN DAY
+                      (open day = Mon-Sat, not a bank holiday) so short
+                      months don't look low
+               ALL    all three - same as  DAY | WEEK | MONTH
+             You can list several, separated by | , e.g.  DAY | WEEK
+             DAILY / WEEKLY / MONTHLY are accepted too.
+
+  baseline=  How much EARLIER history counts as "normal".
+               ALL    every earlier period in the date range
+                      (the baseline grows as time goes on)
+               90D    the previous 90 days    (any number + D)
+               26W    the previous 26 weeks   (any number + W)
+               12M    the previous 12 months  (any number + M)
+               2Y     the previous 2 years    (any number + Y)
+             One value is used for every period in period=.
+             A list gives one per period, in the same order:
+               period=ALL, baseline=90D | 26W | 12M
+             Blank = 56D for DAY, 12W for WEEK, 12M for MONTH.
+             Tip: match the span to the period. 90D is plenty for DAY
+             (about 13 earlier Mondays) but gives MONTH only ~3 months.
+             Use a rolling span if volumes drift over time; use ALL if
+             they're stable and you want the steadiest baseline.
+
+  views=     Which splits to run, separated by | . Each view is checked
+             separately, with its own baseline for every group in it.
+               ALL               straight totals (everything together)
+               product           each product vs its own history
+               channel           each channel vs its own history
+               product channel   each product/channel combination
+             Use any column names from your data (max two per view is
+             sensible - small groups are noisy). Blank = ALL.
+
+  min_obs=   How many earlier periods the baseline must contain before
+             anything can be flagged. Until then the period shows WARMUP.
+             One value, or one per period in the same order:  4 | 6 | 6
+             Blank = 4 for DAY, 6 for WEEK and MONTH. Minimum sensible: 3.
+
+  charts=    Y  a chart per group: volume vs the shaded expected range,
+                with markers on flagged periods                (default)
+             N  no charts
+
+  tables=    Y  a full table of every period, HIGH rows red, LOW rows
+                purple, WARMUP rows grey                       (default)
+             N  no full tables
+
+  The KEY OBSERVATIONS table (flagged periods, worst first) is always
+  printed - those are the urgent call-outs.
+
+  EXAMPLES
+    %volume_check(period=ALL);
+        day, week and month with default baselines, totals only
+    %volume_check(period=ALL, baseline=ALL);
+        all three, each compared with all earlier history
+    %volume_check(period=ALL, baseline=90D | 26W | 12M,
+                  views=ALL | product | channel | product channel);
+        the lot: every period, every view
+    %volume_check(period=DAY, baseline=90D, views=product, charts=N);
+        daily by product, no charts
+    %volume_check(period=WEEK | MONTH, baseline=ALL, tables=N, min_obs=8);
+        weeks and months vs all history, need 8 periods before flagging
+
+  %flag_summary;
+  --------------
+  No arguments. Run it once after your %volume_check calls. Prints every
+  call-out from the whole run (most recent first) and a count of HIGH,
+  LOW and SUNDAY flags by period, view and group.
+
+  WHAT THE FLAGS MEAN
+  -------------------
+  HIGH     above the expected range (mean + k x SD)
+  LOW      below the expected range (mean - k x SD)
+  SUNDAY   volume on a Sunday - Sundays should be zero
+  OK       inside the expected range
+  WARMUP   not enough earlier periods yet to judge (see min_obs=)
+
+  COLUMNS IN THE OUTPUT
+  ---------------------
+  Expected        mean of the baseline
+  Expected low    mean - k x SD (shown as 0 if it would be negative)
+  Expected high   mean + k x SD
+  vs expected     % difference from the expected value
+  z-score         how many SDs from expected (+ above, - below)
+  Periods in baseline   how many earlier periods the baseline used
+
+  OUTPUT TABLES (in WORK - open them in EG to sort and filter)
+  ------------------------------------------------------------
+  ALL_FLAGS       every call-out from every check in this run, with
+                  period_type, baseline, level (the view), group_name,
+                  date, volume, mean, lower, upper, pct_diff, z,
+                  severity (size of z), baseline_n and flag.
+                  Emptied at the start of each run.
+  DAILY_FLAGS     every period with its expected range, for the LAST
+  WEEKLY_FLAGS    view run of each period - handy for checking one
+  MONTHLY_FLAGS   group in detail.
 ====================================================================*/</span>
 
-%let k       = 2;    <span class="c">/* how many SDs counts as unusual (2 = ~5%, 3 = ~0.3%) */</span>
-%let window  = 28;   <span class="c">/* look-back periods for the baseline                  */</span>
-%let min_obs = 14;   <span class="c">/* don't flag until the baseline has this many points  */</span>
+%let k = 2;              <span class="c">/* standard deviations that count as unusual  */</span>
+
+<span class="c">/* DATE RANGE - write dates like 01JAN2025. Blank = no limit.          */</span>
+%let start_date = ;      <span class="c">/* ignore data before this date                */</span>
+%let end_date   = ;      <span class="c">/* ignore data after this date                 */</span>
+
 
 <span class="c">/*--------------------------------------------------------------------
-  0. SAMPLE DATA - replace with your own table (one row per record
-     or per day, with a DATE and a VOLUME column)
+  0. SAMPLE DATA - replace with your own table (see the toolkit page).
+     One row per day per product per channel, with a VOLUME.
+     Planted problems sit in particular product/channel combinations.
 --------------------------------------------------------------------*/</span>
+
+<span class="c">/* TO USE YOUR OWN DATA: delete the sample step below and use this
+   instead (or build it with the Column mapper on the toolkit page).
+
+data raw;
+  set mylib.my_table;                 &lt;- your library.table
+  date   = datepart(created_dt);      &lt;- your date column (drop datepart()
+                                         if it's already a date)
+  volume = 1;                         &lt;- 1 per row, or your count column
+  format date date9.;
+  keep date volume product channel;   &lt;- add your group columns here
+run;
+*/</span>
+
 data raw;
   call streaminit(42);
-  do date = '01JAN2026'd to '30JUN2026'd;
-    select (weekday(date));                      <span class="c">/* 1=Sun ... 7=Sat */</span>
-      when (1)    volume = 0;                    <span class="c">/* Sunday: closed  */</span>
-      when (7)    volume = round(rand('normal', 300, 40));   <span class="c">/* quiet Saturday */</span>
-      otherwise   volume = round(rand('normal', 1000, 80));
+  length product $10 channel $6;
+  array prod[3] $10 _temporary_ ('Cards', 'Loans', 'Mortgages');
+  array base[3]     _temporary_ (500, 300, 200);
+  array chan[2] $6  _temporary_ ('Phone', 'Online');
+  array share[2]    _temporary_ (0.4, 0.6);
+
+  do date = '01JAN2025'd to '30JUN2026'd;       <span class="c">/* 18 months of history */</span>
+    select (weekday(date));                       <span class="c">/* 1=Sun ... 7=Sat */</span>
+      when (1)  dayfactor = 0;                    <span class="c">/* Sunday: closed  */</span>
+      when (7)  dayfactor = 0.3;                  <span class="c">/* quiet Saturday  */</span>
+      otherwise dayfactor = 1;
     end;
-    if date = '15MAR2026'd then volume = 40;     <span class="c">/* planted Sunday activity */</span>
-    if date = '17MAR2026'd then volume = 1600;   <span class="c">/* planted spike */</span>
-    if date = '02MAY2026'd then volume = 500;    <span class="c">/* planted drop  */</span>
-    output;
+    if '01APR2026'd &lt;= date &lt;= '30APR2026'd then
+      dayfactor = dayfactor * 1.15;               <span class="c">/* planted busy month */</span>
+
+    do p = 1 to 3;
+      do c = 1 to 2;
+        product = prod[p];
+        channel = chan[c];
+        expected = base[p] * share[c] * dayfactor;
+        if expected &gt; 0 then volume = rand('poisson', expected);
+        else volume = 0;
+
+        <span class="c">/* planted problems */</span>
+        if date = '17MAR2026'd and product = 'Cards' and channel = 'Phone'
+          then volume = volume + 400;             <span class="c">/* spike */</span>
+        if date = '02MAY2026'd and product = 'Loans' and channel = 'Online'
+          then volume = round(volume * 0.2);      <span class="c">/* drop  */</span>
+        if date = '15MAR2026'd and product = 'Mortgages' and channel = 'Online'
+          then volume = 40;                       <span class="c">/* Sunday activity */</span>
+        output;
+      end;
+    end;
   end;
   format date date9.;
+  keep date product channel volume;
 run;
 
 <span class="c">/*--------------------------------------------------------------------
-  1. Daily and weekly totals
+  1. One-off setup: date filter, holidays, calendar, open days per month
 --------------------------------------------------------------------*/</span>
-proc sql;
-  create table daily as
-  select date, sum(volume) as volume
-  from raw
-  group by date
-  order by date;
-
-  create table weekly as
-  select intnx('week.2', date, 0, 'b') as week_start format=date9.,  <span class="c">/* Monday-start weeks */</span>
-         sum(volume) as volume
-  from raw
-  group by 1
-  order by 1;
-quit;
-
-<span class="c">/* the flag macro expects a column called DATE */</span>
-data weekly; set weekly(rename=(week_start=date)); run;
-
-
-
-<span class="c">/*--------------------------------------------------------------------
-  2. Flagging macro
-     Baseline uses ONLY previous periods, so today's value can't
-     hide itself by inflating its own mean/SD.
-     Optional BY= runs a separate baseline per group
-     (e.g. per team, per product, or per day-of-week).
---------------------------------------------------------------------*/</span>
-%macro flag_deviations(in=, out=, window=&amp;window, k=&amp;k, min_obs=&amp;min_obs, by=);
-
-  proc sort data=&amp;in out=_srt; by &amp;by date; run;
-
-  data &amp;out;
-    set _srt;
-    by &amp;by date;
-    length flag $6;
-    array buf[&amp;window] _temporary_;   <span class="c">/* ring buffer of previous values */</span>
-    retain n 0;
-
-    %if %length(&amp;by) %then %do;
-      if first.%scan(&amp;by, -1) then do;
-        call missing(of buf[*]);
-        n = 0;
-      end;
-    %end;
-
-    <span class="c">/* stats over the previous WINDOW values */</span>
-    cnt = 0; s = 0; ss = 0;
-    do i = 1 to &amp;window;
-      if not missing(buf[i]) then do;
-        cnt = cnt + 1;
-        s   = s + buf[i];
-        ss  = ss + buf[i]**2;
-      end;
+data _null_;
+  length s e $40;
+  s = strip(symget('start_date'));
+  e = strip(symget('end_date'));
+  sd = '01JAN1900'd;
+  ed = '31DEC2999'd;
+  if s ne '' then do;
+    sd = input(s, ?? date11.);
+    if missing(sd) then do;
+      put 'ERROR: start_date "' s '" not recognised - write it like 01JAN2025. No start limit applied.';
+      sd = '01JAN1900'd;
     end;
-
-    if cnt &gt;= &amp;min_obs then do;
-      mean  = s / cnt;
-      sd    = sqrt(max(0, (ss - cnt*mean**2) / (cnt - 1)));
-      lower = mean - &amp;k*sd;
-      upper = mean + &amp;k*sd;
-      if sd &gt; 0 then z = (volume - mean) / sd;
-      if      volume &gt; upper then flag = 'HIGH';
-      else if volume &lt; lower then flag = 'LOW';
-      else                        flag = 'OK';
+  end;
+  if e ne '' then do;
+    ed = input(e, ?? date11.);
+    if missing(ed) then do;
+      put 'ERROR: end_date "' e '" not recognised - write it like 30JUN2026. No end limit applied.';
+      ed = '31DEC2999'd;
     end;
-    else flag = 'WARMUP';
+  end;
+  call symputx('sd_num', sd);
+  call symputx('ed_num', ed);
+run;
 
-    <span class="c">/* add this period to the buffer for future rows */</span>
-    n = n + 1;
-    buf[mod(n-1, &amp;window) + 1] = volume;
-
-    format mean sd lower upper comma12.1 z 6.2;
-    drop i s ss n;
-  run;
-
-%mend flag_deviations;
-
-<span class="c">/*--------------------------------------------------------------------
-  3. Run it
---------------------------------------------------------------------*/</span>
-<span class="c">/* Bank holidays / closure days - excluded from the daily check so they
-   don't get flagged LOW or drag the baseline down. Add your own dates. */</span>
+<span class="c">/* Bank holidays / closure days - excluded from the daily check and from
+   the monthly open-day count. England &amp; Wales dates; add your own. */</span>
 data holidays;
   input date :date9.;
   format date date9.;
   datalines;
+01JAN2025
+18APR2025
+21APR2025
+05MAY2025
+26MAY2025
+25AUG2025
+25DEC2025
+26DEC2025
+01JAN2026
 03APR2026
 06APR2026
 04MAY2026
@@ -449,70 +695,541 @@ data holidays;
 ;
 run;
 
-<span class="c">/* Split days: Sundays get a simple "should be zero" check,
-   Mon-Sat each get their own baseline (Mondays vs previous Mondays...) */</span>
-proc sql;
-  create table daily_dow as
-  select d.*, weekday(d.date) as dow
-  from daily d
-  where d.date not in (select date from holidays);
+data raw_g;                     <span class="c">/* filtered data + dummy group for the ALL view */</span>
+  set raw;
+  where &amp;sd_num &lt;= date &lt;= &amp;ed_num;
+  length _all_ $3;
+  _all_ = 'All';
+run;
+
+proc sql noprint;
+  select min(date), max(date), count(*)
+    into :first_day trimmed, :last_day trimmed, :n_rows trimmed
+  from raw_g;
 quit;
 
-data sunday_check open_days;
-  set daily_dow;
-  if dow = 1 then output sunday_check;
-  else output open_days;
+%put NOTE: Using &amp;n_rows rows from %sysfunc(putn(&amp;first_day, date9.)) to %sysfunc(putn(&amp;last_day, date9.)).;
+
+data _dates;                    <span class="c">/* every calendar day in the data range */</span>
+  do date = &amp;first_day to &amp;last_day;
+    output;
+  end;
+  format date date9.;
 run;
 
-data sunday_check;
-  set sunday_check;
-  length flag $6;
-  if volume &gt; 0 then flag = 'SUNDAY';   <span class="c">/* any Sunday activity is worth a look */</span>
-  else flag = 'OK';
-run;
+proc sql;                       <span class="c">/* open days (Mon-Sat, not a holiday) per month */</span>
+  create table _mopen as
+  select intnx('month', date, 0, 'b') as mo, count(*) as open_days
+  from _dates
+  where weekday(date) ne 1
+    and date not in (select date from holidays)
+  group by 1;
+quit;
 
-<span class="c">/* Daily (Mon-Sat): last 8 of the same weekday as baseline */</span>
-%flag_deviations(in=open_days, out=daily_flags, window=8, min_obs=4, by=dow);
-proc sort data=daily_flags; by date; run;
-
-<span class="c">/* Weekly: last 12 weeks as baseline (every week has a weekend, so no
-   adjustment needed - but a bank-holiday week will read lower) */</span>
-%flag_deviations(in=weekly, out=weekly_flags, window=12, min_obs=6);
+proc datasets lib=work nolist nowarn;   <span class="c">/* start each run with an empty ALL_FLAGS */</span>
+  delete all_flags;
+quit;
 
 <span class="c">/*--------------------------------------------------------------------
-  4. Exceptions report
+  2. Flagging macro (used by %volume_check - no need to call directly)
+     Baseline uses ONLY earlier periods, so a value can't hide itself
+     by inflating its own mean/SD.
+     SPAN= ALL (everything earlier) or a rolling span like 90D/26W/12M.
+     BY= runs a separate baseline per group.
 --------------------------------------------------------------------*/</span>
-title "Daily volumes outside &amp;k SD of the rolling baseline";
-proc print data=daily_flags noobs;
-  where flag in ('HIGH', 'LOW');
-  var date volume mean sd z flag;
-run;
+%macro _span_ok(span);
+  %local s u nb;
+  %let s = %upcase(&amp;span);
+  %if &amp;s = ALL %then 1;
+  %else %if %length(&amp;s) &lt; 2 %then 0;
+  %else %do;
+    %let u  = %substr(&amp;s, %length(&amp;s));
+    %let nb = %substr(&amp;s, 1, %eval(%length(&amp;s) - 1));
+    %if %sysfunc(notdigit(&amp;nb)) %then 0;
+    %else %if &amp;u = D or &amp;u = W or &amp;u = M or &amp;u = Y %then 1;
+    %else 0;
+  %end;
+%mend _span_ok;
 
-title "Sundays with any volume";
-proc print data=sunday_check noobs;
-  where flag = 'SUNDAY';
-  var date volume flag;
-run;
+%macro flag_deviations(in=, out=, span=ALL, min_obs=4, kval=2, by=);
+  %local mode nback unit interval cap;
+  %let cap  = 5000;                        <span class="c">/* max earlier periods held per group */</span>
+  %let span = %upcase(&amp;span);
 
-title "Weekly volumes outside &amp;k SD of the rolling baseline";
-proc print data=weekly_flags noobs;
-  where flag in ('HIGH', 'LOW');
-  var date volume mean sd z flag;
-run;
+  %if &amp;span = ALL %then %let mode = ALL;
+  %else %do;
+    %let mode  = SPAN;
+    %let unit  = %substr(&amp;span, %length(&amp;span));
+    %let nback = %substr(&amp;span, 1, %eval(%length(&amp;span) - 1));
+    %if &amp;unit = D %then %let interval = day;
+    %else %if &amp;unit = W %then %let interval = week;
+    %else %if &amp;unit = M %then %let interval = month;
+    %else %let interval = year;
+  %end;
+
+  proc sort data=&amp;in out=_srt; by &amp;by date; run;
+
+  data &amp;out;
+    set _srt;
+    by &amp;by date;
+    length flag $6 baseline $8;
+    baseline = "&amp;span";
+
+  %if &amp;mode = ALL %then %do;
+    <span class="c">/* Expanding baseline: running totals of everything earlier */</span>
+    retain cnt s ss 0;
+    if first.%scan(&amp;by, -1) then do;
+      cnt = 0; s = 0; ss = 0;
+    end;
+  %end;
+  %else %do;
+    <span class="c">/* Rolling baseline: earlier periods with a date inside the span */</span>
+    array bd[&amp;cap] _temporary_;            <span class="c">/* dates of earlier periods   */</span>
+    array bv[&amp;cap] _temporary_;            <span class="c">/* volumes of earlier periods */</span>
+    retain n 0;
+    if first.%scan(&amp;by, -1) then n = 0;
+
+    cnt = 0; s = 0; ss = 0;
+    cutoff = intnx("&amp;interval", date, -&amp;nback, 's');
+    do j = 0 to min(n, &amp;cap) - 1;          <span class="c">/* newest first, stop when too old */</span>
+      idx = mod(n - 1 - j, &amp;cap) + 1;
+      if bd[idx] &lt; cutoff then leave;
+      cnt = cnt + 1;
+      s   = s + bv[idx];
+      ss  = ss + bv[idx]**2;
+    end;
+  %end;
+
+    baseline_n = cnt;                      <span class="c">/* earlier periods in the baseline */</span>
+    if cnt &gt;= &amp;min_obs then do;
+      mean  = s / cnt;
+      sd    = sqrt(max(0, (ss - cnt*mean**2) / (cnt - 1)));
+      lower = max(0, mean - &amp;kval*sd);
+      upper = mean + &amp;kval*sd;
+      if sd &gt; 0 then do;
+        z = (volume - mean) / sd;
+        severity = abs(z);
+      end;
+      if mean &gt; 0 then pct_diff = (volume - mean) / mean;
+      if      volume &gt; upper then flag = 'HIGH';
+      else if volume &lt; mean - &amp;kval*sd then flag = 'LOW';
+      else                        flag = 'OK';
+    end;
+    else flag = 'WARMUP';
+
+    <span class="c">/* add this period so later rows can use it */</span>
+  %if &amp;mode = ALL %then %do;
+    cnt = cnt + 1;
+    s   = s + volume;
+    ss  = ss + volume**2;
+    drop cnt s ss;
+  %end;
+  %else %do;
+    n = n + 1;
+    idx = mod(n - 1, &amp;cap) + 1;
+    bd[idx] = date;
+    bv[idx] = volume;
+    drop n j idx cnt s ss cutoff;
+  %end;
+
+    format mean sd lower upper comma12.1 z 6.2 pct_diff percentn8.1;
+    label baseline = 'Baseline' baseline_n = 'Periods in baseline'
+          mean = 'Expected' lower = 'Expected low' upper = 'Expected high'
+          pct_diff = 'vs expected' z = 'z-score' flag = 'Flag';
+  run;
+
+%mend flag_deviations;
 
 <span class="c">/*--------------------------------------------------------------------
-  5. Control-chart style plot
+  3. One period, one view (used by %volume_check)
 --------------------------------------------------------------------*/</span>
-title "Daily volume with &amp;k SD band";
-proc sgplot data=daily_flags;
-  band   x=date lower=lower upper=upper / transparency=0.7 legendlabel="Expected range";
-  series x=date y=mean   / lineattrs=(pattern=dash) legendlabel="Rolling mean";
-  series x=date y=volume / legendlabel="Volume";
-  scatter x=date y=volume / group=flag markerattrs=(symbol=circlefilled size=9);
-  where flag ne 'WARMUP';
-  yaxis label="Volume";
-run;
-title;</pre>
+%macro _check_view(period=, baseline=, min_obs=, groups=, view_no=, charts=, tables=);
+  %local grp gcomma showgrp label res plabel pnoun period_no nkey;
+
+  %if %length(&amp;groups) = 0 %then %do;
+    %let grp     = _all_;
+    %let gcomma  = _all_;
+    %let showgrp = ;
+    %let label   = Everything;
+  %end;
+  %else %do;
+    %let grp     = %sysfunc(compbl(&amp;groups));
+    %let gcomma  = %unquote(%sysfunc(translate(&amp;grp, %str(,), %str( ))));
+    %let showgrp = &amp;grp;
+    %let label   = By &amp;grp;
+  %end;
+
+  <span class="c">/* Daily totals per group, with zero-filled gaps */</span>
+  proc sql;
+    create table _daily_raw as
+    select &amp;gcomma, date, sum(volume) as volume
+    from raw_g
+    group by &amp;gcomma, date;
+
+    create table _groups as
+    select distinct &amp;gcomma from raw_g;
+
+    create table _grid as
+    select * from _groups, _dates;
+
+    create table daily as
+    select * from _grid natural left join _daily_raw
+    order by &amp;gcomma, date;
+  quit;
+
+  data daily;
+    set daily;
+    if missing(volume) then volume = 0;
+  run;
+
+  %if &amp;period = DAY %then %do;
+    %let res = daily_flags;  %let plabel = Daily;   %let period_no = 1;
+    %let pnoun = days (each weekday vs the same weekday);
+
+    <span class="c">/* Sundays should be zero; Mon-Sat checked vs the same weekday */</span>
+    proc sql;
+      create table daily_dow as
+      select d.*, weekday(d.date) as dow
+      from daily d
+      where d.date not in (select date from holidays);
+    quit;
+
+    data sunday_check open_days;
+      set daily_dow;
+      length flag $6;
+      if dow = 1 then do;
+        if volume &gt; 0 then flag = 'SUNDAY';
+        else flag = 'OK';
+        output sunday_check;
+      end;
+      else output open_days;
+    run;
+
+    %flag_deviations(in=open_days, out=daily_flags, span=&amp;baseline, min_obs=&amp;min_obs,
+                     kval=&amp;k, by=&amp;grp dow);
+    proc sort data=daily_flags; by &amp;grp date; run;
+  %end;
+
+  %else %if &amp;period = WEEK %then %do;
+    %let res = weekly_flags; %let plabel = Weekly;  %let period_no = 2;
+    %let pnoun = weeks (Monday to Sunday);
+
+    data _wk;
+      set daily(rename=(date=day));
+      wk = intnx('week.2', day, 0, 'b');
+    run;
+
+    proc sql;
+      create table weekly as
+      select &amp;gcomma, wk as date format=date9., sum(volume) as volume
+      from _wk
+      group by &amp;gcomma, wk
+      order by &amp;gcomma, date;
+    quit;
+
+    %flag_deviations(in=weekly, out=weekly_flags, span=&amp;baseline, min_obs=&amp;min_obs,
+                     kval=&amp;k, by=&amp;grp);
+  %end;
+
+  %else %do;
+    %let res = monthly_flags; %let plabel = Monthly; %let period_no = 3;
+    %let pnoun = months (average per open day);
+
+    data _mo;
+      set daily(rename=(date=day));
+      mo = intnx('month', day, 0, 'b');
+    run;
+
+    proc sql;
+      create table _mtot as
+      select &amp;gcomma, mo, sum(volume) as total_volume
+      from _mo
+      group by &amp;gcomma, mo;
+
+      create table monthly as
+      select t.*, o.open_days,
+             t.mo as date format=monyy7.,
+             t.total_volume / o.open_days as volume format=comma12.1
+      from _mtot t inner join _mopen o
+        on t.mo = o.mo
+      order by &amp;gcomma, date;
+    quit;
+
+    %flag_deviations(in=monthly, out=monthly_flags, span=&amp;baseline, min_obs=&amp;min_obs,
+                     kval=&amp;k, by=&amp;grp);
+  %end;
+
+  <span class="c">/* ---------- Key observations: the urgent call-outs ---------- */</span>
+  data _key;
+    set &amp;res(where=(flag in ('HIGH', 'LOW')))
+        %if &amp;period = DAY %then sunday_check(where=(flag = 'SUNDAY'));
+        ;
+  run;
+
+  proc sort data=_key; by descending severity descending date; run;
+
+  proc sql noprint;
+    select count(*) into :nkey trimmed from _key;
+  quit;
+
+  title1 "KEY OBSERVATIONS - &amp;plabel | &amp;label | baseline &amp;baseline | &amp;k SD";
+  title2 "Unusual &amp;pnoun, worst first";
+  %if &amp;nkey = 0 %then %do;
+    data _msg;
+      length Result $80;
+      Result = "No unusual &amp;plabel periods found for this view.";
+    run;
+    proc print data=_msg noobs; run;
+  %end;
+  %else %do;
+    proc print data=_key noobs label;
+      var &amp;showgrp date
+          %if &amp;period = MONTH %then total_volume open_days;
+          volume mean lower upper pct_diff z flag;
+      %if &amp;period = MONTH %then %do;
+        format total_volume comma12.;
+        label date = 'Month' total_volume = 'Total volume' open_days = 'Open days'
+              volume = 'Avg per open day';
+      %end;
+      %else %do;
+        label date = %if &amp;period = WEEK %then 'Week starting'; %else 'Date'; volume = 'Volume';
+      %end;
+    run;
+  %end;
+
+  <span class="c">/* Add this check's call-outs to the combined table */</span>
+  data _new;
+    length view_no period_no 8 level $60 group_name $200 period_type $7
+           baseline $8 baseline_n total_volume open_days mean lower upper
+           pct_diff sd z severity 8;
+    set _key;
+    view_no    = &amp;view_no;
+    period_no  = &amp;period_no;
+    level      = "&amp;label";
+    group_name = catx(' / ', &amp;gcomma);
+    if flag = 'SUNDAY' then period_type = 'Sunday';
+    else period_type = "&amp;plabel";
+    format date date9.;
+    keep view_no period_no level group_name period_type baseline baseline_n
+         date volume total_volume open_days mean lower upper pct_diff sd z
+         severity flag;
+  run;
+
+  proc append base=all_flags data=_new force; run;
+
+  <span class="c">/* ---------- Charts: one per group ---------- */</span>
+  %if %upcase(&amp;charts) = Y %then %do;
+    title1 "&amp;plabel | &amp;label | baseline &amp;baseline";
+    title2 "Volume against the expected range (&amp;k SD). Markers show flagged &amp;pnoun.";
+    proc sgplot data=&amp;res;
+      by &amp;grp;
+      where flag ne 'WARMUP';
+      band   x=date lower=lower upper=upper / transparency=0.6 legendlabel="Expected range";
+      series x=date y=mean   / lineattrs=(pattern=dash) legendlabel="Expected";
+      series x=date y=volume / lineattrs=(thickness=2) legendlabel=
+             %if &amp;period = MONTH %then "Avg per open day"; %else "Volume";;
+      scatter x=date y=volume / group=flag markerattrs=(symbol=circlefilled size=10)
+              name="pts";
+      xaxis display=(nolabel) grid;
+      yaxis grid label=%if &amp;period = MONTH %then "Average per open day"; %else "Volume";;
+    run;
+  %end;
+
+  <span class="c">/* ---------- Full table: every period, flagged rows highlighted ---------- */</span>
+  %if %upcase(&amp;tables) = Y %then %do;
+    title1 "All &amp;plabel periods | &amp;label | baseline &amp;baseline";
+    title2 "Red = HIGH, purple = LOW, grey = WARMUP (not enough history yet)";
+    proc report data=&amp;res nowd;
+      column &amp;showgrp date
+             %if &amp;period = MONTH %then total_volume open_days;
+             volume mean lower upper pct_diff z baseline_n flag;
+      %if %length(&amp;showgrp) %then %do;
+        %local gi;
+        %do gi = 1 %to %sysfunc(countw(&amp;showgrp));
+          define %scan(&amp;showgrp, &amp;gi) / display;
+        %end;
+      %end;
+      define date       / display %if &amp;period = WEEK %then 'Week starting'; %else %if &amp;period = MONTH %then 'Month'; %else 'Date';;
+      %if &amp;period = MONTH %then %do;
+        define total_volume / display 'Total volume' format=comma12.;
+        define open_days    / display 'Open days';
+        define volume       / display 'Avg per open day' format=comma12.1;
+      %end;
+      %else %do;
+        define volume     / display 'Volume' format=comma12.;
+      %end;
+      define mean       / display 'Expected'      format=comma12.1;
+      define lower      / display 'Expected low'  format=comma12.1;
+      define upper      / display 'Expected high' format=comma12.1;
+      define pct_diff   / display 'vs expected'   format=percentn8.1;
+      define z          / display 'z-score'       format=6.2;
+      define baseline_n / display 'Periods in baseline';
+      define flag       / display 'Flag';
+      compute flag;
+        if flag = 'HIGH' then
+          call define(_row_, 'style', 'style={background=cxFDE2D8 fontweight=bold}');
+        else if flag = 'LOW' then
+          call define(_row_, 'style', 'style={background=cxEDE4FD fontweight=bold}');
+        else if flag = 'WARMUP' then
+          call define(_row_, 'style', 'style={foreground=cx8A8A8A}');
+      endcomp;
+    run;
+  %end;
+  title;
+%mend _check_view;
+
+<span class="c">/*--------------------------------------------------------------------
+  The macro you call:
+    period   = DAY, WEEK, MONTH, a list such as DAY | WEEK,
+               or ALL (= DAY | WEEK | MONTH)                    (required)
+    baseline = ALL, or a rolling span: 90D, 26W, 12M, 2Y ...
+               One value applies to every period; or give one per
+               period in the same order, e.g. 90D | 26W | 12M.
+               Blank = 56D for DAY, 12W for WEEK, 12M for MONTH.
+    views    = splits to run, separated by |                    (blank = ALL)
+               ALL | product | channel | product channel
+    min_obs  = earlier periods needed before anything is flagged.
+               One value, or one per period. Blank = 4 / 6 / 6.
+    charts   = Y/N  chart per group                             (default Y)
+    tables   = Y/N  full table of every period                  (default Y)
+  Key observations are always printed.
+--------------------------------------------------------------------*/</span>
+%macro volume_check(period=, baseline=, views=, min_obs=, charts=Y, tables=Y);
+  %local plist np nb nm j p b m i n lvl;
+
+  %let plist = %upcase(&amp;period);
+  %if &amp;plist = ALL %then %let plist = DAY | WEEK | MONTH;
+  %if %length(&amp;plist) = 0 %then %do;
+    %put ERROR: volume_check: period= is required (DAY, WEEK, MONTH or ALL).;
+    %return;
+  %end;
+  %let np = %sysfunc(countw(&amp;plist, |));
+
+  %let nb = 0;
+  %if %length(&amp;baseline) %then %let nb = %sysfunc(countw(&amp;baseline, |));
+  %if &amp;nb &gt; 1 and &amp;nb ne &amp;np %then %do;
+    %put ERROR: volume_check: give one baseline, or one per period (&amp;np periods, &amp;nb baselines).;
+    %return;
+  %end;
+
+  %let nm = 0;
+  %if %length(&amp;min_obs) %then %let nm = %sysfunc(countw(&amp;min_obs, |));
+  %if &amp;nm &gt; 1 and &amp;nm ne &amp;np %then %do;
+    %put ERROR: volume_check: give one min_obs, or one per period (&amp;np periods, &amp;nm values).;
+    %return;
+  %end;
+
+  %if %length(&amp;views) = 0 %then %let views = ALL;
+
+  %do j = 1 %to &amp;np;
+    <span class="c">/* which period */</span>
+    %let p = %scan(&amp;plist, &amp;j, |);
+    %if &amp;p = DAILY   %then %let p = DAY;
+    %if &amp;p = WEEKLY  %then %let p = WEEK;
+    %if &amp;p = MONTHLY %then %let p = MONTH;
+    %if &amp;p ne DAY and &amp;p ne WEEK and &amp;p ne MONTH %then %do;
+      %put ERROR: volume_check: period "&amp;p" not recognised - use DAY, WEEK, MONTH or ALL.;
+      %return;
+    %end;
+
+    <span class="c">/* which baseline */</span>
+    %if &amp;nb = 0 %then %do;
+      %if &amp;p = DAY %then %let b = 56D;
+      %else %if &amp;p = WEEK %then %let b = 12W;
+      %else %let b = 12M;
+    %end;
+    %else %if &amp;nb = 1 %then %let b = &amp;baseline;
+    %else %let b = %scan(&amp;baseline, &amp;j, |);
+    %let b = %upcase(%sysfunc(compress(&amp;b)));
+    %if %_span_ok(&amp;b) = 0 %then %do;
+      %put ERROR: volume_check: baseline "&amp;b" not recognised - use ALL, or a number followed by D, W, M or Y (e.g. 90D).;
+      %return;
+    %end;
+
+    <span class="c">/* how much history before flagging */</span>
+    %if &amp;nm = 0 %then %do;
+      %if &amp;p = DAY %then %let m = 4;
+      %else %let m = 6;
+    %end;
+    %else %if &amp;nm = 1 %then %let m = %sysfunc(compress(&amp;min_obs));
+    %else %let m = %sysfunc(compress(%scan(&amp;min_obs, &amp;j, |)));
+
+    <span class="c">/* run each view */</span>
+    %let n = %sysfunc(countw(&amp;views, |));
+    %do i = 1 %to &amp;n;
+      %let lvl = %scan(&amp;views, &amp;i, |);
+      %if %upcase(&amp;lvl) = ALL %then %do;
+        %_check_view(period=&amp;p, baseline=&amp;b, min_obs=&amp;m, groups=,
+                     view_no=&amp;i, charts=&amp;charts, tables=&amp;tables)
+      %end;
+      %else %do;
+        %_check_view(period=&amp;p, baseline=&amp;b, min_obs=&amp;m, groups=&amp;lvl,
+                     view_no=&amp;i, charts=&amp;charts, tables=&amp;tables)
+      %end;
+    %end;
+  %end;
+%mend volume_check;
+
+<span class="c">/* Run summary: every call-out from every %volume_check call, most
+   recent first, plus a count by period, view and group */</span>
+%macro flag_summary;
+  %if %sysfunc(exist(all_flags)) %then %do;
+    proc sort data=all_flags out=_summary;
+      by descending date descending severity;
+    run;
+
+    title1 "RUN SUMMARY - every call-out from this run, most recent first";
+    title2 "Data from %sysfunc(putn(&amp;first_day, date9.)) to %sysfunc(putn(&amp;last_day, date9.)) | &amp;k SD";
+    proc print data=_summary noobs label;
+      var date period_type baseline level group_name volume mean pct_diff z flag;
+      label date = 'Date / start' period_type = 'Period' level = 'View'
+            group_name = 'Group' volume = 'Volume';
+      format volume comma12.1;
+    run;
+
+    title1 "RUN SUMMARY - number of call-outs by period, view and group";
+    title2;
+    proc sql;
+      select period_type label='Period', baseline label='Baseline',
+             level label='View', group_name label='Group',
+             sum(flag = 'HIGH')   as n_high   label='HIGH',
+             sum(flag = 'LOW')    as n_low    label='LOW',
+             sum(flag = 'SUNDAY') as n_sunday label='SUNDAY',
+             max(date) as latest format=date9. label='Most recent'
+      from all_flags
+      group by period_no, period_type, baseline, view_no, level, group_name
+      order by period_no, baseline, view_no, group_name;
+    quit;
+    title;
+  %end;
+  %else %do;
+    title1 "RUN SUMMARY";
+    data _msg;
+      length Result $80;
+      Result = "No unusual periods found in any check.";
+    run;
+    proc print data=_msg noobs; run;
+    title;
+  %end;
+%mend flag_summary;
+
+<span class="c">/*--------------------------------------------------------------------
+  4. RUN THE CHECKS - delete, add or change calls freely.
+--------------------------------------------------------------------*/</span>
+
+<span class="c">/* Everything in one go: day, week and month, each with its own baseline */</span>
+%volume_check(period=ALL, baseline=90D | 26W | 12M,
+              views=ALL | product | channel | product channel);
+
+<span class="c">/* Or one period at a time, e.g.
+%volume_check(period=DAY,   baseline=90D, views=ALL | product);
+%volume_check(period=WEEK,  baseline=ALL, views=ALL, charts=N);
+%volume_check(period=MONTH, baseline=12M, views=ALL, tables=N);
+*/</span>
+
+%flag_summary;
+
+<span class="c">/* Every call-out is also in WORK.ALL_FLAGS - open it in EG to filter or sort. */</span></pre>
     </div>
   </div>
 </section>
@@ -591,33 +1308,128 @@ title;</pre>
 
     <div class="card wide code-card">
       <div class="code-bar">
-        <div><h3>rising_keywords.sas</h3><span class="meta">226 lines · paste into a new EG program</span></div>
+        <div><h3>rising_keywords.sas</h3><span class="meta">321 lines · paste into a new EG program</span></div>
         <button class="copy" type="button" id="copy-kw" data-target="code-kw">Copy program</button>
       </div>
       <pre class="code" id="code-kw" tabindex="0"><span class="c">/*====================================================================
-  Rising keywords in free text
-  1. Clean + tokenise text into words (and two-word phrases)
-  2. Remove stop words
-  3. Count how many RECORDS mention each term per week
-     (document frequency - one long rant can't dominate)
-  4. Compare the share of records mentioning each term in the RECENT
-     period vs a BASELINE period (two-proportion z-test)
-  5. Report and chart the terms that are rising significantly
-  Base SAS only. Runs as-is with the sample data.
+  RISING KEYWORDS IN FREE TEXT                   Base SAS 9.4 / EG
+  ====================================================================
+  WHAT IT DOES
+  Finds words and two-word phrases that people have suddenly started
+  using more (or less) in free-text comments.
+  1. Cleans the text (lowercase, no punctuation or numbers) and splits
+     it into words and two-word phrases, after removing stop words.
+  2. Counts how many RECORDS mention each term per week - so one long
+     rant can't dominate, and busy weeks don't inflate every word.
+  3. Compares the share of records mentioning each term in the RECENT
+     weeks with the BASELINE weeks just before (two-proportion z-test).
+  4. Lists and charts the terms that have changed significantly.
+
+  HOW TO RUN IT
+  1. Step 0: replace the sample data with your own table (see INPUT
+     DATA below), or run the sample first to see the output.
+  2. Adjust the settings just below this box.
+  3. Add words that appear everywhere in YOUR data to the stop words
+     in step 1 (e.g. customer, account, complaint, please).
+  4. Run the whole program (F3 in Enterprise Guide).
+
+  ====================================================================
+  QUICK REFERENCE - every setting
+  ====================================================================
+
+  recent_weeks    How many weeks count as "now". The recent period always
+                  ENDS at the latest week in the data (weeks run Monday to
+                  Sunday). Default 4.
+
+  baseline_weeks  How many weeks just BEFORE the recent period count as
+                  "normal". Default 12. More weeks = steadier baseline,
+                  but slower to adapt if the normal mix changes.
+
+  z_cut           How strong a change must be to be flagged (z-score).
+                  You're testing thousands of terms at once, so keep this
+                  high: 2 flags lots by pure chance, 3 is a sensible
+                  default, 4 shows only the strongest changes.
+
+  min_docs        A term needs at least this many recent records to be
+                  flagged RISING or NEW (and this many baseline records to
+                  be flagged FALLING). Stops one-off typos showing up as
+                  trends. Default 10. Raise it for big data sets.
+
+  min_len         Words shorter than this are dropped. Default 3
+                  (drops "i", "a", "my", "to"...).
+
+  top_n           How many of the top rising terms appear in the weekly
+                  trend chart. Default 6.
+
+  INPUT DATA (step 0) - must end up as table WORK.RAW_TEXT
+  --------------------------------------------------------
+  id     Unique per record (numeric or text). Used so a record that
+         mentions a word twice still counts once.
+  date   Numeric SAS date. If yours is a date-time use
+         date = datepart(your_column);
+  text   The free text (character). Default length 300 - if your
+         comments are longer, raise  length text $300  in step 0 AND
+         length clean $600  in step 2 (make clean about double).
+
+  STOP WORDS (step 1) - table WORK.STOPWORDS
+  ------------------------------------------
+  Words to ignore, separated by spaces, between "datalines;" and ";".
+  Lowercase, no apostrophes (write dont, not don't). "not" and "no" are
+  deliberately kept because "not arrived" carries meaning.
+
+  WHAT THE FLAGS MEAN
+  -------------------
+  NEW       appears in the recent weeks but not at all in the baseline
+  RISING    significantly more common recently than in the baseline
+  FALLING   significantly less common recently
+  (blank)   no significant change
+
+  COLUMNS IN THE OUTPUT (table WORK.RISING)
+  -----------------------------------------
+  term              the word or two-word phrase
+  type              word or phrase
+  Recent mentions   records mentioning it in the recent weeks   (x1)
+  Recent share      as a % of all records in the recent weeks
+  Baseline mentions records mentioning it in the baseline weeks (x0)
+  Baseline share    as a % of all records in the baseline weeks
+  lift              recent share / baseline share (3.0 = 3x as common)
+  z                 strength of the change (+ rising, - falling)
+  flag              NEW / RISING / FALLING
+
+  OTHER OUTPUT TABLES (in WORK)
+  -----------------------------
+  TOKENS      one row per record per term - handy to find example
+              comments:  proc print data=tokens; where term='face id'; run;
+  TERM_WEEK   records mentioning each term, per week
+  TREND       weekly share for the charted terms
 ====================================================================*/</span>
 
-%let recent_weeks   = 4;    <span class="c">/* the "now" period                           */</span>
-%let baseline_weeks = 12;   <span class="c">/* the "normal" period just before it         */</span>
-%let min_docs       = 10;   <span class="c">/* ignore terms with fewer recent mentions    */</span>
-%let z_cut          = 3;    <span class="c">/* significance bar - keep high, you're testing
-                               thousands of terms so 2 gives lots of noise */</span>
-%let min_len        = 3;    <span class="c">/* drop very short tokens                     */</span>
-%let top_n          = 6;    <span class="c">/* terms to chart                             */</span>
+%let recent_weeks   = 4;    <span class="c">/* weeks that count as "now" (ending at the latest week) */</span>
+%let baseline_weeks = 12;   <span class="c">/* weeks just before that count as "normal"              */</span>
+%let min_docs       = 10;   <span class="c">/* fewest records a term needs before it can be flagged  */</span>
+%let z_cut          = 3;    <span class="c">/* strength of change needed: 3 = sensible, 4 = strict   */</span>
+%let min_len        = 3;    <span class="c">/* drop words shorter than this                          */</span>
+%let top_n          = 6;    <span class="c">/* rising terms to show in the trend chart               */</span>
 
 <span class="c">/*--------------------------------------------------------------------
   0. SAMPLE DATA - replace with your table: ID, DATE, TEXT
      (a new login problem appears from June)
 --------------------------------------------------------------------*/</span>
+
+<span class="c">/* TO USE YOUR OWN DATA: delete the sample step below and use this
+   instead (or build it with the Column mapper on the toolkit page).
+
+data raw_text;
+  set mylib.my_table;                 &lt;- your library.table
+  length text $300;                   &lt;- raise if comments are longer
+  id   = complaint_ref;               &lt;- your unique ID column
+  date = datepart(received_dt);       &lt;- your date column (drop datepart()
+                                         if it's already a date)
+  text = description;                 &lt;- your free-text column
+  keep id date text;
+run;
+*/</span>
+
 data raw_text;
   call streaminit(7);
   length text $300;
@@ -849,6 +1661,7 @@ run;</pre>
         <tbody>
           <tr><td>1 · Volumes</td><td><code>raw</code></td><td><code>date</code></td><td>A numeric SAS date (not a date-time)</td><td>report_date, received_dt, created_on</td></tr>
           <tr><td>1 · Volumes</td><td><code>raw</code></td><td><code>volume</code></td><td>Numeric. Can be 1 per row if each row is one item</td><td>item_count, cases, calls</td></tr>
+          <tr><td>1 · Volumes</td><td><code>raw</code></td><td>your group columns</td><td>Optional. Kept under their own names and used in <code>views=</code></td><td>product, channel, team, region</td></tr>
           <tr><td>2 · Keywords</td><td><code>raw_text</code></td><td><code>id</code></td><td>Unique per record. Numeric or text</td><td>complaint_ref, case_id, ticket_no</td></tr>
           <tr><td>2 · Keywords</td><td><code>raw_text</code></td><td><code>date</code></td><td>A numeric SAS date (not a date-time)</td><td>received_date, logged_dt</td></tr>
           <tr><td>2 · Keywords</td><td><code>raw_text</code></td><td><code>text</code></td><td>Character</td><td>description, notes, verbatim, summary</td></tr>
@@ -878,6 +1691,8 @@ run;</pre>
           </select>
           <label for="v-vol">Volume column <span>leave blank if one row = one item</span></label>
           <input id="v-vol" value="item_count" spellcheck="false">
+          <label for="v-grp">Group columns <span>optional, up to two, separated by a space</span></label>
+          <input id="v-grp" value="" placeholder="e.g. product channel" spellcheck="false">
         </form>
         <div class="map-out">
           <div class="code-bar"><span class="meta">Replaces the <code>data raw;</code> step</span><button class="copy" type="button" id="copy-map-vol" data-target="map-vol">Copy</button></div>
@@ -938,6 +1753,175 @@ format date date9.;</pre>
   </div>
 </section>
 
+<!-- ============ REFERENCE ============ -->
+<section id="reference">
+  <div class="sec-head">
+    <span class="sec-num">04</span><h2>Full reference</h2>
+    <p class="sec-sub">Every setting, argument, flag and output column for both programs. The same reference is in the comment block at the top of each program, so it goes wherever the code goes.</p>
+  </div>
+
+  <h3 class="ref-h">Program 1 · Volume deviation monitor</h3>
+  <div class="grid">
+    <div class="card wide key">
+      <span class="tag">Settings at the top</span>
+      <h3>Apply to every check</h3>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Setting</th><th>Default</th><th>Allowed values</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>k</td><td class="num">2</td><td>Any number, decimals allowed</td><td>How many standard deviations from normal counts as unusual. At <b>2</b> it's sensitive: about 1 normal period in 20 gets flagged. <b>2.5</b> is a middle ground. At <b>3</b> you only get strong signals: about 1 normal period in 370.</td></tr>
+          <tr><td>start_date</td><td>blank</td><td>A date like <code>01JAN2025</code>, or blank</td><td>Ignore data before this date. The baseline is limited to this range too, so start about one baseline-length early.</td></tr>
+          <tr><td>end_date</td><td>blank</td><td>A date like <code>30JUN2026</code>, or blank</td><td>Ignore data after this date.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card wide key">
+      <span class="tag">%volume_check( … )</span>
+      <h3>Every argument</h3>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Argument</th><th>If left out</th><th>Allowed values</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>period=</td><td><b>required</b></td><td><code>DAY</code> <code>WEEK</code> <code>MONTH</code> <code>ALL</code>, or a list such as <code>DAY | WEEK</code>. DAILY, WEEKLY and MONTHLY also work.</td><td><b>DAY</b>: each Mon–Sat day against the same weekday, plus a check that Sundays are zero.<br><b>WEEK</b>: Monday-to-Sunday weeks, labelled by the Monday.<br><b>MONTH</b>: calendar months as an average per open day, so short months don't look low.<br><b>ALL</b>: all three.</td></tr>
+          <tr><td>baseline=</td><td>56D / 12W / 12M</td><td><code>ALL</code>, or a number followed by <code>D</code>, <code>W</code>, <code>M</code> or <code>Y</code>, e.g. <code>90D</code> <code>26W</code> <code>12M</code> <code>2Y</code>. One value, or a list with one per period.</td><td>How much earlier history counts as normal. <b>ALL</b> uses every earlier period, so the baseline grows over time. A span uses only that much history before each date and rolls forward with it. A list such as <code>90D | 26W | 12M</code> matches the periods in order.</td></tr>
+          <tr><td>views=</td><td>ALL</td><td><code>ALL</code> and/or your column names, separated by <code>|</code>. Put two names in one view to combine them: <code>product channel</code>.</td><td>Which splits to check. Each view has its own baseline for every group in it. <code>ALL | product | channel | product channel</code> runs all four.</td></tr>
+          <tr><td>min_obs=</td><td>4 / 6 / 6</td><td>A whole number of 3 or more. One value, or one per period: <code>4 | 6 | 6</code></td><td>How many earlier periods a baseline needs before anything can be flagged. Until then the period shows WARMUP.</td></tr>
+          <tr><td>charts=</td><td>Y</td><td><code>Y</code> or <code>N</code></td><td>A chart for each group: volume against the shaded expected range, with markers on flagged periods.</td></tr>
+          <tr><td>tables=</td><td>Y</td><td><code>Y</code> or <code>N</code></td><td>A full table of every period, with HIGH rows in red, LOW rows in purple and WARMUP rows greyed out.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">The key observations table (flagged periods, worst first) is always printed. Run <code>%flag_summary;</code> once at the end, with no arguments, for every call-out from the run.</p>
+    </div>
+
+    <div class="card wide">
+      <span class="tag">Examples</span>
+      <h3>Copy, paste, adjust</h3>
+      <pre class="code" style="max-height:none"><span class="c">/* Day, week and month with default baselines, totals only */</span>
+%volume_check(period=ALL);
+
+<span class="c">/* All three, each compared with all earlier history */</span>
+%volume_check(period=ALL, baseline=ALL);
+
+<span class="c">/* Every period and every view */</span>
+%volume_check(period=ALL, baseline=90D | 26W | 12M,
+              views=ALL | product | channel | product channel);
+
+<span class="c">/* Daily by product, no charts */</span>
+%volume_check(period=DAY, baseline=90D, views=product, charts=N);
+
+<span class="c">/* Weeks and months vs all history, 8 periods needed before flagging */</span>
+%volume_check(period=WEEK | MONTH, baseline=ALL, tables=N, min_obs=8);
+
+<span class="c">/* Always finish with */</span>
+%flag_summary;</pre>
+    </div>
+
+    <div class="card">
+      <span class="tag">Flags</span>
+      <h3>What they mean</h3>
+      <div class="table-scroll"><table>
+        <tbody>
+          <tr><td><span class="chip high">HIGH</span></td><td>Above the expected range (mean + k × SD)</td></tr>
+          <tr><td><span class="chip low">LOW</span></td><td>Below the expected range (mean − k × SD)</td></tr>
+          <tr><td><span class="chip high">SUNDAY</span></td><td>Volume on a Sunday. Sundays should be zero.</td></tr>
+          <tr><td><span class="chip ok">OK</span></td><td>Inside the expected range</td></tr>
+          <tr><td><span class="chip grey">WARMUP</span></td><td>Not enough earlier periods yet (see min_obs=)</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <span class="tag">Columns</span>
+      <h3>Reading the tables</h3>
+      <div class="table-scroll"><table>
+        <tbody>
+          <tr><td>Expected</td><td>The baseline mean</td></tr>
+          <tr><td>Expected low / high</td><td>mean ± k × SD. The low end is shown as 0 rather than a negative number.</td></tr>
+          <tr><td>vs expected</td><td>The % difference from the expected value</td></tr>
+          <tr><td>z-score</td><td>How many SDs from expected: + above, − below</td></tr>
+          <tr><td>Periods in baseline</td><td>How many earlier periods the baseline used</td></tr>
+          <tr><td>Avg per open day</td><td>Months only: total ÷ open days</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <span class="tag">Tables in WORK</span>
+      <h3>Open these in EG</h3>
+      <div class="table-scroll"><table>
+        <tbody>
+          <tr><td>ALL_FLAGS</td><td>Every call-out from every check in the run, with period, baseline, view, group, expected range, % difference, z and severity. It's emptied at the start of each run.</td></tr>
+          <tr><td>DAILY_FLAGS<br>WEEKLY_FLAGS<br>MONTHLY_FLAGS</td><td>Every period with its expected range, for the last view run of each period</td></tr>
+          <tr><td>HOLIDAYS</td><td>The bank holidays and closure days in use</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <h3 class="ref-h">Program 2 · Rising keywords</h3>
+  <div class="grid">
+    <div class="card wide key">
+      <span class="tag">Settings at the top</span>
+      <h3>Every setting</h3>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Setting</th><th>Default</th><th>Allowed values</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>recent_weeks</td><td class="num">4</td><td>Whole number</td><td>How many weeks count as "now". The recent period always ends at the latest week in the data, and weeks run Monday to Sunday.</td></tr>
+          <tr><td>baseline_weeks</td><td class="num">12</td><td>Whole number</td><td>How many weeks just before the recent period count as "normal". More weeks give a steadier baseline but adapt more slowly.</td></tr>
+          <tr><td>z_cut</td><td class="num">3</td><td>Any number, usually 3–4</td><td>How strong a change must be to be flagged. You're testing thousands of terms, so a cut of 2 flags plenty by pure chance.</td></tr>
+          <tr><td>min_docs</td><td class="num">10</td><td>Whole number</td><td>The fewest records a term needs (recent records for RISING or NEW, baseline records for FALLING) before it can be flagged. Stops one-off typos showing up as trends.</td></tr>
+          <tr><td>min_len</td><td class="num">3</td><td>Whole number</td><td>Words shorter than this are dropped.</td></tr>
+          <tr><td>top_n</td><td class="num">6</td><td>Whole number</td><td>How many top rising terms appear in the weekly trend chart.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <span class="tag">Input</span>
+      <h3>WORK.RAW_TEXT</h3>
+      <div class="table-scroll"><table>
+        <tbody>
+          <tr><td>id</td><td>Unique per record, numeric or text. A record that mentions a word twice still counts once.</td></tr>
+          <tr><td>date</td><td>A numeric SAS date. Use <code>datepart()</code> on a date-time.</td></tr>
+          <tr><td>text</td><td>Character, length 300 by default. For longer comments, raise <code>text</code> in step 0 and <code>clean</code> (to about double) in step 2.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <span class="tag">Stop words</span>
+      <h3>WORK.STOPWORDS</h3>
+      <p>Words to ignore, separated by spaces, between <code>datalines;</code> and <code>;</code> in step 1. Write them in lowercase with no apostrophes (<i>dont</i>, not <i>don't</i>).</p>
+      <p class="note">Add words that appear everywhere in your data. "not" and "no" are deliberately kept.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Flags</span>
+      <h3>What they mean</h3>
+      <div class="table-scroll"><table>
+        <tbody>
+          <tr><td><span class="chip new">NEW</span></td><td>In the recent weeks but not in the baseline at all</td></tr>
+          <tr><td><span class="chip high">RISING</span></td><td>Significantly more common recently</td></tr>
+          <tr><td><span class="chip low">FALLING</span></td><td>Significantly less common recently</td></tr>
+          <tr><td><span class="chip grey">blank</span></td><td>No significant change</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card wide">
+      <span class="tag">Output</span>
+      <h3>Columns and tables</h3>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Column in WORK.RISING</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>term / type</td><td>The word or two-word phrase, and which of the two it is</td></tr>
+          <tr><td>x1 · Recent mentions</td><td>Records mentioning it in the recent weeks</td></tr>
+          <tr><td>share_recent</td><td>The same, as a % of all records in the recent weeks</td></tr>
+          <tr><td>x0 · Baseline mentions</td><td>Records mentioning it in the baseline weeks</td></tr>
+          <tr><td>share_baseline</td><td>The same, as a % of all records in the baseline weeks</td></tr>
+          <tr><td>lift</td><td>Recent share ÷ baseline share. 3.0 means three times as common.</td></tr>
+          <tr><td>z</td><td>Strength of the change: + rising, − falling</td></tr>
+          <tr><td>flag</td><td>NEW, RISING or FALLING</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Other tables: <code>TOKENS</code> has one row per record per term, which helps you find example comments: <code>proc print data=tokens; where term='face id'; run;</code>. <code>TERM_WEEK</code> has weekly counts and <code>TREND</code> has the charted shares.</p>
+    </div>
+  </div>
+</section>
+
 <footer>
   Both programs use only Base SAS and are written for SAS 9.4 in Enterprise Guide. Results depend on your data, so sense-check the first few flags by hand before acting on them.
 </footer>
@@ -990,9 +1974,12 @@ document.querySelectorAll('button.copy').forEach(function (btn) {
     var vt = v('v-table', 'mylib.daily_volumes'), vd = col(v('v-date', 'report_date')),
         vty = document.getElementById('v-dtype').value, vvRaw = document.getElementById('v-vol').value.trim();
     var vv = vvRaw ? col(vvRaw) : '';
-    var keep1 = vd + (vv ? ' ' + vv : '');
+    var vg = document.getElementById('v-grp').value.trim().split(/[\s,]+/).filter(Boolean).map(col);
+    var keep1 = vd + (vv ? ' ' + vv : '') + (vg.length ? ' ' + vg.join(' ') : '');
     var ren1 = vd + '=_src_date' + (vv ? ' ' + vv + '=_src_vol' : '');
     var c1 =
+      (vg.length ? '/* Then in step 4 use these columns in views=, e.g.\n     %volume_check(period=ALL, baseline=90D | 26W | 12M, views=ALL | ' + vg.join(' | ') + (vg.length > 1 ? ' | ' + vg.join(' ') : '') + ');\n*/\n\n'
+                 : '/* Then in step 4 use views=ALL for straight totals */\n\n') +
       'data raw;\n' +
       '  set ' + vt + '(keep=' + keep1 + '\n' +
       '      rename=(' + ren1 + '));\n' +
@@ -1000,7 +1987,7 @@ document.querySelectorAll('button.copy').forEach(function (btn) {
       (vv ? '  volume = _src_vol;\n' : '  volume = 1;                /* one row = one item; totals added up later */\n') +
       '  if not missing(date);       /* drop rows with no usable date */\n' +
       '  format date date9.;\n' +
-      '  keep date volume;\n' +
+      '  keep date volume' + (vg.length ? ' ' + vg.join(' ') : '') + ';\n' +
       'run;';
     paint(document.getElementById('map-vol'), c1);
 
